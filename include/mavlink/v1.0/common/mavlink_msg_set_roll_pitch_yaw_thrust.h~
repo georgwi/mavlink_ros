@@ -45,7 +45,7 @@ typedef struct __mavlink_set_roll_pitch_yaw_thrust_t
  * @return length of the message in bytes (excluding serial stream start sign)
  */
 static inline uint16_t mavlink_msg_set_roll_pitch_yaw_thrust_pack(uint8_t system_id, uint8_t component_id, mavlink_message_t* msg,
-						       uint8_t target_system, uint8_t target_component, float roll, float pitch, float yaw, float thrust) //filippo per payload
+						       uint8_t target_system, uint8_t target_component, float roll, float pitch, float yaw, float thrust)
 {
 #if MAVLINK_NEED_BYTE_SWAP || !MAVLINK_ALIGNED_FIELDS
 	char buf[18];
