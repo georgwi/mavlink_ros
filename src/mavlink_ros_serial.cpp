@@ -100,6 +100,37 @@ ros::Publisher attitude_pub;
  * Returns the file descriptor on success or -1 on error.
  */
 
+void OurFunction (const mavlink_ros::controller_out & msg)
+{
+	mavlink_ros::Mavlink mavlink_msg;
+	mavlink_msg.header=msg.header;
+
+	mavlink_msg.len= MAVLINK_MSG_ID_SET_ROLL_PITCH_YAW_THRUST_LEN;
+
+
+	mavlink_msg.sysid=sysid;
+	mavlink_msg.compid=compid;
+	mavlink_msg.msgid=MAVLINK_MSG_ID_SET_ROLL_PITCH_YAW_THRUST;
+	mavlink_msg.fromlcm=FALSE;
+
+
+	mavlink_message_t msg_t;
+
+	mavlink_msg_set_roll_pitch_yaw_thrust_pack(sysid, compid, &msg_t, sysid/*target_system (???)*/, compid/*target_component (???)*/, msg.set_theta, msg.set_phi, msg.set_psi, msg.set_thrust);
+
+	if (verbose) ROS_INFO("Sent Mavlink from ROS to LCM, Message-ID: [%i]", msg_t.msgid);
+
+	// Send message over serial port
+	static uint8_t buffer[MAVLINK_MAX_PACKET_LEN];
+	int messageLength = mavlink_msg_to_send_buffer(buffer, &msg_t);
+	if (debug) printf("Writing %d bytes\n", messageLength);
+	int written = write(fd, (char*)buffer, messageLength);//fd is serial port filippo
+	tcflush(fd, TCOFLUSH);
+	if (messageLength != written) fprintf(stderr, "ERROR: Wrote %d bytes but should have written %d\n", written, messageLength);
+
+}
+
+
 int open_port(std::string& port)
 {
 	int fd; /* File descriptor for the port */
@@ -402,42 +433,6 @@ void mavlinkCallback(const mavlink_ros::Mavlink &mavlink_ros_msg) //Filippo pren
 
 //Filippo unsere funktion
 /******************************************************************************************************************************************/
-
-void OurFunction (const mavlink_ros::controller_out & msg) // const mavlink_ros::Mavlink &mavlink_ros_msg
-
-{
-mavlink_ros::Mavlink mavlink_msg;
-
-mavlink_msg.header=msg.header;
-
-mavlink_msg.len= MAVLINK_MSG_ID_SET_ROLL_PITCH_YAW_THRUST_LEN;
-
-//mavlink_msg.seq=	non devo riempirla!!!
-
-mavlink_msg.sysid=sysid;
-mavlink_msg.compid=compid;
-mavlink_msg.msgid=MAVLINK_MSG_ID_SET_ROLL_PITCH_YAW_THRUST;
-mavlink_msg.fromlcm=FALSE;
-
-
-//sono giusti nell'ordine???
-mavlink_message_t msg_t;
-
-mavlink_msg_set_roll_pitch_yaw_thrust_pack(sysid, compid, &msg_t, sysid/*target_system (???)*/, compid/*target_component (???)*/, msg.set_theta, msg.set_phi, msg.set_psi, msg.set_thrust);
-
-
-
-	if (verbose) ROS_INFO("Sent Mavlink from ROS to LCM, Message-ID: [%i]", msg_t.msgid);
-
-	// Send message over serial port
-	static uint8_t buffer[MAVLINK_MAX_PACKET_LEN];
-	int messageLength = mavlink_msg_to_send_buffer(buffer, &msg_t);
-	if (debug) printf("Writing %d bytes\n", messageLength);
-	int written = write(fd, (char*)buffer, messageLength);//fd is serial port filippo
-	tcflush(fd, TCOFLUSH);
-	if (messageLength != written) fprintf(stderr, "ERROR: Wrote %d bytes but should have written %d\n", written, messageLength);
-
-}
 
 
 int main(int argc, char **argv) {
