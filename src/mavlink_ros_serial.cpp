@@ -63,6 +63,9 @@
 #include <sys/time.h>
 #include <time.h>
 
+#include "mavlink_msg_puppetcopter_imu.h"
+#include "mavlink_ros/control_message.h"
+
 using std::string;
 using namespace std;
 
@@ -74,7 +77,7 @@ int baud = 115200;                 ///< The serial baud rate
 int sysid = 42;             ///< The unique system id of this MAV, 0-127. Has to be consistent across the system
 int compid = 110;
 int serial_compid = 0;
-std::string port = "/dev/ttyUSB0";              ///< The serial port name, e.g. /dev/ttyUSB0
+std::string port = "/dev/ttyACM0";              ///< The serial port name, e.g. /dev/ttyUSB0
 bool silent = false;              ///< Wether console output should be enabled
 bool verbose = false;             ///< Enable verbose output
 bool debug = false;               ///< Enable debug functions and output
@@ -88,6 +91,55 @@ int fd;
 ros::Subscriber mavlink_sub;
 ros::Publisher mavlink_pub;
 ros::Publisher attitude_pub;
+
+/**
+ * Custom Message Conversions (Georg)
+ */
+void convertMavlinkCustomIMUtoROS(mavlink_message_t* message, sensor_msgs::Imu &imu_msg)
+{
+	// Timestamp the message
+	imu_msg.header.stamp = ros::Time::now();
+	imu_msg.header.frame_id = "auk";
+
+	// Decoding of message
+    mavlink_puppetcopter_imu_t puppetcopter_imu;
+	mavlink_msg_puppetcopter_imu_decode(message, &puppetcopter_imu);
+
+    // Quaternion calculation
+    float pitch = puppetcopter_imu.pitch;
+    float roll  = puppetcopter_imu.roll;
+    float yaw   = puppetcopter_imu.yaw;
+    float w  = cos(roll/2)*cos(pitch/2)*cos(yaw/2) + sin(roll/2)*sin(pitch/2)*sin(yaw/2);
+    float q1 = sin(roll/2)*cos(pitch/2)*cos(yaw/2) - cos(roll/2)*sin(pitch/2)*sin(yaw/2);
+    float q2 = cos(roll/2)*sin(pitch/2)*cos(yaw/2) + sin(roll/2)*cos(pitch/2)*sin(yaw/2);
+    float q3 = cos(roll/2)*cos(pitch/2)*sin(yaw/2) - sin(roll/2)*sin(pitch/2)*cos(yaw/2);
+
+	// Rotation Quaternion
+    imu_msg.orientation.x = floor(q1 * 10000 + 0.5) /10000;
+    imu_msg.orientation.y = floor(q2 * 10000 + 0.5) /10000;
+    imu_msg.orientation.z = floor(q3 * 10000 + 0.5) /10000;
+    imu_msg.orientation.w = floor(w  * 10000 + 0.5) /10000;
+    // Angular Velocity
+    imu_msg.angular_velocity.x = floor(puppetcopter_imu.xgyro * 1000 + 0.5) /1000;
+    imu_msg.angular_velocity.y = floor(puppetcopter_imu.ygyro * 1000 + 0.5) /1000;
+    imu_msg.angular_velocity.z = floor(puppetcopter_imu.zgyro * 1000 + 0.5) /1000;
+    // Linear Accelerations
+    imu_msg.linear_acceleration.x = floor(puppetcopter_imu.xacc * 1000 + 0.5) /1000;
+    imu_msg.linear_acceleration.y = (float)puppetcopter_imu.yacc /1000;
+    imu_msg.linear_acceleration.z = (float)puppetcopter_imu.zacc /1000;
+
+    float quat_length_sqr = w*w + q1*q1 + q2*q2 + q3*q3;
+    if (abs(quat_length_sqr - 1) > 0.0001)
+    {
+        ROS_INFO("No unit quaternion for attitude! %f", sqrt(quat_length_sqr));
+    }
+    //ROS_INFO("PuppetCopter IMU Message recieved and processed");
+}
+
+void convertCustomControlToMavlink(const mavlink_ros::control_message & control_msg)
+{
+	ROS_INFO("Control Message recieved");
+}
 
 /**
  *
@@ -248,7 +300,7 @@ void close_port(int fd)
 void* serial_wait(void* serial_ptr)
 {
 	int fd = *((int*) serial_ptr);
-	
+
 	mavlink_status_t lastStatus;
 	lastStatus.packet_rx_drop_count = 0;
 	
@@ -313,7 +365,7 @@ void* serial_wait(void* serial_ptr)
 			}
 			
 			if (verbose || debug)
-				ROS_INFO("Received message from serial with ID #%d (sys:%d|comp:%d):\n", message.msgid, message.sysid, message.compid);
+				ROS_INFO("Received message from serial with ID #%d (sys:%d|comp:%d)", message.msgid, message.sysid, message.compid);
 			
 			/**
 			 * Serialize the Mavlink-ROS-message
@@ -326,6 +378,8 @@ void* serial_wait(void* serial_ptr)
 			rosmavlink_msg.compid = message.compid;
 			rosmavlink_msg.msgid = message.msgid;
 			rosmavlink_msg.fromlcm = false;
+			//ROS_INFO("Length is %d", rosmavlink_msg.len);
+			//ROS_INFO("Sequence is %d", rosmavlink_msg.seq);
 
 			for (int i = 0; i < message.len/8; i++)
 			{
@@ -346,14 +400,21 @@ void* serial_wait(void* serial_ptr)
 			{
 			case MAVLINK_MSG_ID_ATTITUDE:
 				{
-				        sensor_msgs::Imu imu_msg;
-				        //convertMavlinkAttitudeToROS(&message, imu_msg);
-				        attitude_pub.publish(imu_msg);
-
-					if (verbose)
-						ROS_INFO("Published IMU message (sys:%d|comp:%d):\n", message.sysid, message.compid);
+				    //ROS_INFO("Recieved Attitude");
+				    //sensor_msgs::Imu imu_msg;
+				    //convertMavlinkAttitudeToROS(&message, imu_msg);
+				    //attitude_pub.publish(imu_msg);
+					//if (verbose)
+					//	ROS_INFO("Published IMU message (sys:%d|comp:%d):\n", message.sysid, message.compid);
 				}
-				break;
+			case MAVLINK_MSG_ID_PUPPETCOPTER_IMU:
+				{
+					//ROS_INFO("Recieved Custom IMU");
+					sensor_msgs::Imu imu_msg;
+					convertMavlinkCustomIMUtoROS(&message, imu_msg);
+					attitude_pub.publish(imu_msg);
+				}
+			break;
 			}
 		}
 	}
@@ -384,7 +445,6 @@ void mavlinkCallback(const mavlink_ros::Mavlink &mavlink_ros_msg)
 	 * Send mavlink_message to LCM (so that the rest of the MAVConn world can hear us)
 	 */
 	if (verbose) ROS_INFO("Sent Mavlink from ROS to LCM, Message-ID: [%i]", mavlink_ros_msg.msgid);
-
 	// Send message over serial port
 	static uint8_t buffer[MAVLINK_MAX_PACKET_LEN];
 	int messageLength = mavlink_msg_to_send_buffer(buffer, &msg);
@@ -452,10 +512,10 @@ int main(int argc, char **argv) {
 
 	// SETUP ROS
 	ros::NodeHandle n;
-	mavlink_sub = n.subscribe("/toMAVLINK", 1000, mavlinkCallback);
-	mavlink_pub = n.advertise<mavlink_ros::Mavlink> ("/fromMAVLINK", 1000);
+	mavlink_sub = n.subscribe("/control_out", 1000, convertCustomControlToMavlink);
+	mavlink_pub = n.advertise<mavlink_ros::Mavlink> ("/fromMAVLINK", 10);
 	ros::NodeHandle attitude_nh;
-	attitude_pub = attitude_nh.advertise<sensor_msgs::Imu>("/fromMAVLINK/Imu", 1000);
+	attitude_pub = attitude_nh.advertise<sensor_msgs::Imu>("/PuppetCopterImu", 1000);
 
 	GThread* serial_thread;
 	GError* err;
@@ -491,7 +551,7 @@ int main(int argc, char **argv) {
 	{
 		exit(noErrors);
 	}
-	
+
 	// Ready to roll
 	printf("\nMAVLINK SERIAL TO ROS BRIDGE STARTED ON MAV %d (COMPONENT ID:%d) - RUNNING..\n\n", sysid, compid);
 	
@@ -500,7 +560,6 @@ int main(int argc, char **argv) {
 	 * Now pump callbacks (execute mavlinkCallback) until CTRL-c is pressed
 	 */
 	ros::spin();
-	
 	
 	close_port(fd);
 	
