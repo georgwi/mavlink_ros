@@ -406,7 +406,7 @@ void* serial_wait(void* serial_ptr)
 			/**
 			 * Serialize the Mavlink-ROS-message
 			 */
-/* (Georg)	mavlink_ros::Mavlink rosmavlink_msg;
+			mavlink_ros::Mavlink rosmavlink_msg;
 
 			rosmavlink_msg.len = message.len;
 			rosmavlink_msg.seq = message.seq;
@@ -419,32 +419,31 @@ void* serial_wait(void* serial_ptr)
 			{
 				(rosmavlink_msg.payload64).push_back(message.payload64[i]);
 			}
-(Georg) */		
+		
 			/**
 			 * Mark the ROS-Message as coming not from LCM
 			 */
-// (Georg)	rosmavlink_msg.fromlcm = true;
+			rosmavlink_msg.fromlcm = true;
 			
 			/**
 			 * Send the received MAVLink message to ROS (topic: mavlink, see main())
 			 */
-// (Georg)		mavlink_pub.publish(rosmavlink_msg);
+			mavlink_pub.publish(rosmavlink_msg);
 
 			switch(message.msgid)
 			{
 // CUSTOM Publishing msg
 // Georg
 // ==================================================================
-/*			case MAVLINK_MSG_ID_ATTITUDE:
+			case MAVLINK_MSG_ID_ATTITUDE:
 				{
-				        sensor_msgs::Imu imu_msg;
+				        //sensor_msgs::Imu imu_msg;
 				        //convertMavlinkAttitudeToROS(&message, imu_msg);
-				        attitude_pub.publish(imu_msg);
+				        //attitude_pub.publish(imu_msg);
 
 					if (verbose)
 						ROS_INFO("Published IMU message (sys:%d|comp:%d):\n", message.sysid, message.compid);
 				}
-*/
 			case MAVLINK_MSG_ID_PUPPETCOPTER_IMU:
 				{
 					sensor_msgs::Imu imu_msg;
@@ -560,7 +559,7 @@ int main(int argc, char **argv) {
 // ===================================================================================================
 	mavlink_sub = n.subscribe("/controller_out", 1000,  convertROStoMAVLink);
 //  removed unneccesary publisher:
-//	mavlink_pub = n.advertise<mavlink_ros::Mavlink> ("/fromMAVLINK", 1000);
+	mavlink_pub = n.advertise<mavlink_ros::Mavlink> ("/fromMAVLINK", 1000);
 	ros::NodeHandle attitude_nh;
 	attitude_pub = attitude_nh.advertise<sensor_msgs::Imu>("/PuppetCopterImu", 1000);
 // ===================================================================================================
