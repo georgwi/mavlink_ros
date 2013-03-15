@@ -63,26 +63,31 @@
 #include <sys/time.h>
 #include <time.h>
 
+// CUSTOM Definitions
+// Filippo & Georg
+// ========================================
 #include "mavlink_msg_puppetcopter_imu.h"
 #include "mavlink_ros/control_message.h"
 #include "mavlink_ros/controller_out.h" 
+// ========================================
+ // CUSTOM Definitions END
 
 using std::string;
 using namespace std;
 
-struct timeval tv;		  ///< System time
+struct timeval tv;		 			///< System time
 
-int baud = 115200;                 ///< The serial baud rate
+int baud = 115200;                  ///< The serial baud rate
 
 // Settings
-int sysid = 42;             ///< The unique system id of this MAV, 0-127. Has to be consistent across the system //filippo per riempiere
+int sysid = 42;             		///< The unique system id of this MAV, 0-127. Has to be consistent across the system
 int compid = 110;
 int serial_compid = 0;
-std::string port = "/dev/ttyACM0"; std::string port = "/dev/ttyACM0";              ///< The serial port name, e.g. /dev              ///< The serial port name, e.std::string port = "/dev/ttyACM0";              ///< The serial port name, e.g. /dev g. /dev/ttyUSB0
-bool silent = false;              ///< Wether console output should be enabled
-bool verbose = false;             ///< Enable verbose output
-bool debug = false;               ///< Enable debug functions and output
-bool pc2serial = true;			  ///< Enable PC to serial push mode (send more stuff from pc over serial)
+std::string port = "/dev/ttyACM0";  ///< The serial port name, e.g. /dev g. /dev/ttyUSB0
+bool silent = false;              	///< Wether console output should be enabled
+bool verbose = false;             	///< Enable verbose output
+bool debug = false;               	///< Enable debug functions and output
+bool pc2serial = true;			  	///< Enable PC to serial push mode (send more stuff from pc over serial)
 int fd;
 
 /**
@@ -93,10 +98,10 @@ ros::Subscriber mavlink_sub;
 ros::Publisher mavlink_pub;
 ros::Publisher attitude_pub;
 
-/**
- * Custom Message Conversions (Georg)
- */
 
+// CUSTOM Functions
+// Filippo & Georg
+// ==========================================================================================
 void convertMavlinkCustomIMUtoROS(mavlink_message_t* message, sensor_msgs::Imu &imu_msg)
 {
 	// Timestamp the message
@@ -135,38 +140,42 @@ void convertMavlinkCustomIMUtoROS(mavlink_message_t* message, sensor_msgs::Imu &
     {
         ROS_INFO("No unit quaternion for attitude! %f", sqrt(quat_length_sqr));
     }
-    //ROS_INFO("PuppetCopter IMU Message recieved and processed");
+    if (verbose)
+    	ROS_INFO("PuppetCopter IMU Message recieved and processed");
 }
 
 void convertROStoMAVLink(const mavlink_ros::controller_out & msg)
 {
 	mavlink_ros::Mavlink mavlink_msg;
+
+	// Define new MAVLink message
 	mavlink_msg.header=msg.header;
-
 	mavlink_msg.len= MAVLINK_MSG_ID_SET_ROLL_PITCH_YAW_THRUST_LEN;
-
-
 	mavlink_msg.sysid=sysid;
 	mavlink_msg.compid=compid;
 	mavlink_msg.msgid=MAVLINK_MSG_ID_SET_ROLL_PITCH_YAW_THRUST;
 	mavlink_msg.fromlcm=FALSE;
 
-
+	// Pack the new MAVLink message:
 	mavlink_message_t msg_t;
-
 	mavlink_msg_set_roll_pitch_yaw_thrust_pack(sysid, compid, &msg_t, sysid/*target_system (???)*/, compid/*target_component (???)*/, msg.set_theta, msg.set_phi, msg.set_psi, msg.set_thrust);
-
-	if (verbose) ROS_INFO("Sent Mavlink from ROS to LCM, Message-ID: [%i]", msg_t.msgid);
+	if (verbose)
+		ROS_INFO("Sent Mavlink message");
 
 	// Send message over serial port
+	// This code is taken from the function mavlinkCallback
 	static uint8_t buffer[MAVLINK_MAX_PACKET_LEN];
 	int messageLength = mavlink_msg_to_send_buffer(buffer, &msg_t);
 	if (debug) printf("Writing %d bytes\n", messageLength);
-	int written = write(fd, (char*)buffer, messageLength);//fd is serial port filippo
+	// Filippo: fd is the serial port
+	int written = write(fd, (char*)buffer, messageLength);
 	tcflush(fd, TCOFLUSH);
 	if (messageLength != written) fprintf(stderr, "ERROR: Wrote %d bytes but should have written %d\n", written, messageLength);
 
 }
+// ==========================================================================================
+// CUSTOM Functions END
+
 
 /**
  *
@@ -397,7 +406,7 @@ void* serial_wait(void* serial_ptr)
 			/**
 			 * Serialize the Mavlink-ROS-message
 			 */
-			mavlink_ros::Mavlink rosmavlink_msg;
+/* (Georg)	mavlink_ros::Mavlink rosmavlink_msg;
 
 			rosmavlink_msg.len = message.len;
 			rosmavlink_msg.seq = message.seq;
@@ -410,35 +419,42 @@ void* serial_wait(void* serial_ptr)
 			{
 				(rosmavlink_msg.payload64).push_back(message.payload64[i]);
 			}
-			
+(Georg) */		
 			/**
 			 * Mark the ROS-Message as coming not from LCM
 			 */
-			rosmavlink_msg.fromlcm = true;
+// (Georg)	rosmavlink_msg.fromlcm = true;
 			
 			/**
 			 * Send the received MAVLink message to ROS (topic: mavlink, see main())
 			 */
-			mavlink_pub.publish(rosmavlink_msg);
+// (Georg)		mavlink_pub.publish(rosmavlink_msg);
 
 			switch(message.msgid)
 			{
-			case MAVLINK_MSG_ID_ATTITUDE:
+// CUSTOM Publishing msg
+// Georg
+// ==================================================================
+/*			case MAVLINK_MSG_ID_ATTITUDE:
 				{
-				        //sensor_msgs::Imu imu_msg;
+				        sensor_msgs::Imu imu_msg;
 				        //convertMavlinkAttitudeToROS(&message, imu_msg);
-				        //attitude_pub.publish(imu_msg);
+				        attitude_pub.publish(imu_msg);
 
 					if (verbose)
 						ROS_INFO("Published IMU message (sys:%d|comp:%d):\n", message.sysid, message.compid);
 				}
+*/
 			case MAVLINK_MSG_ID_PUPPETCOPTER_IMU:
 				{
-					//ROS_INFO("Recieved Custom IMU");
 					sensor_msgs::Imu imu_msg;
 					convertMavlinkCustomIMUtoROS(&message, imu_msg);
 					attitude_pub.publish(imu_msg);
+					if (verbose)
+						ROS_INFO("Published PuppetCopter IMU message");
 				}
+// ==================================================================
+// CUSTOM Publishing msg END
 			break;
 			}
 		}
@@ -538,10 +554,17 @@ int main(int argc, char **argv) {
 
 	// SETUP ROS
 	ros::NodeHandle n;
-	mavlink_sub = n.subscribe("/to_MAVLink_node", 1000,  convertROStoMAVLink);// filippo /topic che arriva= controller/out to_MAVLink_node
-	mavlink_pub = n.advertise<mavlink_ros::Mavlink> ("/fromMAVLINK", 1000);
+
+// CUSTOM modification of nodes
+// Filippo & Georg
+// ===================================================================================================
+	mavlink_sub = n.subscribe("/controller_out", 1000,  convertROStoMAVLink);
+//  removed unneccesary publisher:
+//	mavlink_pub = n.advertise<mavlink_ros::Mavlink> ("/fromMAVLINK", 1000);
 	ros::NodeHandle attitude_nh;
 	attitude_pub = attitude_nh.advertise<sensor_msgs::Imu>("/PuppetCopterImu", 1000);
+// ===================================================================================================
+// CUSTOM modification of nodes END
 
 	GThread* serial_thread;
 	GError* err;
