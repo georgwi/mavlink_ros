@@ -95,45 +95,70 @@ ros::Publisher attitude_pub;
 /**
  * Custom Message Conversions (Georg)
  */
+// Definitions for removing acceleration spikes
+float last_xacc = 0;
+float last_yacc = 0;
+float last_zacc = 9.8;
 void convertMavlinkCustomIMUtoROS(mavlink_message_t* message, sensor_msgs::Imu &imu_msg)
 {
 	// Timestamp the message
 	imu_msg.header.stamp = ros::Time::now();
-	imu_msg.header.frame_id = "auk";
+	imu_msg.header.frame_id = "puppetcopter_imu";
 
 	// Decoding of message
     mavlink_puppetcopter_imu_t puppetcopter_imu;
 	mavlink_msg_puppetcopter_imu_decode(message, &puppetcopter_imu);
 
+	// Coordinate Transformation
+	// exchange x, y - negate z
+    float pitch = puppetcopter_imu.roll;
+    float roll  = puppetcopter_imu.pitch;
+    float yaw   = - puppetcopter_imu.yaw;
+    float xgyro = puppetcopter_imu.ygyro;
+    float ygyro = puppetcopter_imu.xgyro;
+    float zgyro = - puppetcopter_imu.zgyro;
+    float xacc  = (float)puppetcopter_imu.yacc /1000;
+    float yacc  = floor(puppetcopter_imu.xacc * 1000 + 0.5) /1000;
+    float zacc  = - (float)puppetcopter_imu.zacc /1000;
+
+    // remove accleration spikes: not the nice way :)
+    if (abs(last_xacc - xacc) > 8)
+    	xacc = last_xacc;
+    last_xacc = xacc;
+    if (abs(last_yacc - yacc) > 8)
+    	yacc = last_yacc;
+    last_yacc = yacc;
+    if (abs(last_zacc - zacc) > 8)
+    	zacc = last_zacc;
+    last_zacc = zacc;
+
     // Quaternion calculation
-    float pitch = puppetcopter_imu.pitch;
-    float roll  = puppetcopter_imu.roll;
-    float yaw   = puppetcopter_imu.yaw;
     float w  = cos(roll/2)*cos(pitch/2)*cos(yaw/2) + sin(roll/2)*sin(pitch/2)*sin(yaw/2);
     float q1 = sin(roll/2)*cos(pitch/2)*cos(yaw/2) - cos(roll/2)*sin(pitch/2)*sin(yaw/2);
     float q2 = cos(roll/2)*sin(pitch/2)*cos(yaw/2) + sin(roll/2)*cos(pitch/2)*sin(yaw/2);
     float q3 = cos(roll/2)*cos(pitch/2)*sin(yaw/2) - sin(roll/2)*sin(pitch/2)*cos(yaw/2);
 
 	// Rotation Quaternion
-    imu_msg.orientation.x = floor(q1 * 10000 + 0.5) /10000;
-    imu_msg.orientation.y = floor(q2 * 10000 + 0.5) /10000;
-    imu_msg.orientation.z = floor(q3 * 10000 + 0.5) /10000;
-    imu_msg.orientation.w = floor(w  * 10000 + 0.5) /10000;
+    imu_msg.orientation.x = q1;
+    imu_msg.orientation.y = q2;
+    imu_msg.orientation.z = q3;
+    imu_msg.orientation.w = w;
     // Angular Velocity
-    imu_msg.angular_velocity.x = floor(puppetcopter_imu.xgyro * 1000 + 0.5) /1000;
-    imu_msg.angular_velocity.y = floor(puppetcopter_imu.ygyro * 1000 + 0.5) /1000;
-    imu_msg.angular_velocity.z = floor(puppetcopter_imu.zgyro * 1000 + 0.5) /1000;
+    imu_msg.angular_velocity.x = xgyro;
+    imu_msg.angular_velocity.y = ygyro;
+    imu_msg.angular_velocity.z = zgyro;
     // Linear Accelerations
-    imu_msg.linear_acceleration.x = floor(puppetcopter_imu.xacc * 1000 + 0.5) /1000;
-    imu_msg.linear_acceleration.y = (float)puppetcopter_imu.yacc /1000;
-    imu_msg.linear_acceleration.z = (float)puppetcopter_imu.zacc /1000;
+    imu_msg.linear_acceleration.x = xacc;
+    imu_msg.linear_acceleration.y = yacc;
+    imu_msg.linear_acceleration.z = zacc;
 
     float quat_length_sqr = w*w + q1*q1 + q2*q2 + q3*q3;
     if (abs(quat_length_sqr - 1) > 0.0001)
     {
         ROS_INFO("No unit quaternion for attitude! %f", sqrt(quat_length_sqr));
     }
-    //ROS_INFO("PuppetCopter IMU Message recieved and processed");
+    if (verbose)
+    	ROS_INFO("PuppetCopter IMU Message recieved and processed");
 }
 
 void convertCustomControlToMavlink(const mavlink_ros::control_message & control_msg)
