@@ -557,7 +557,7 @@ int main(int argc, char **argv) {
 // CUSTOM modification of nodes
 // Filippo & Georg
 // ===================================================================================================
-	mavlink_sub = n.subscribe("/controller_out", 1000,  convertROStoMAVLink);
+	mavlink_sub = n.subscribe("/to_MAVLink_node", 1000,  convertROStoMAVLink);
 //  removed unneccesary publisher:
 	mavlink_pub = n.advertise<mavlink_ros::Mavlink> ("/fromMAVLINK", 1000);
 	ros::NodeHandle attitude_nh;
