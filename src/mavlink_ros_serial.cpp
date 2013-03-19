@@ -65,6 +65,8 @@
 
 #include "mavlink_msg_puppetcopter_imu.h"
 #include "mavlink_ros/control_message.h"
+#include "geometry_msgs/Quaternion.h"
+#include "tf/transform_datatypes.h"
 
 using std::string;
 using namespace std;
@@ -99,6 +101,7 @@ ros::Publisher attitude_pub;
 float last_xacc = 0;
 float last_yacc = 0;
 float last_zacc = 9.8;
+float pi = 3.14159265;
 void convertMavlinkCustomIMUtoROS(mavlink_message_t* message, sensor_msgs::Imu &imu_msg)
 {
 	// Timestamp the message
@@ -111,38 +114,39 @@ void convertMavlinkCustomIMUtoROS(mavlink_message_t* message, sensor_msgs::Imu &
 
 	// Coordinate Transformation
 	// exchange x, y - negate z
-    float pitch = puppetcopter_imu.roll;
-    float roll  = puppetcopter_imu.pitch;
-    float yaw   = - puppetcopter_imu.yaw;
+    float roll  = puppetcopter_imu.roll;
+    float pitch = puppetcopter_imu.pitch;
+    float yaw   = puppetcopter_imu.yaw;
     float xgyro = puppetcopter_imu.ygyro;
     float ygyro = puppetcopter_imu.xgyro;
-    float zgyro = - puppetcopter_imu.zgyro;
-    float xacc  = (float)puppetcopter_imu.yacc /1000;
-    float yacc  = floor(puppetcopter_imu.xacc * 1000 + 0.5) /1000;
+    float zgyro = puppetcopter_imu.zgyro;
+    float xacc  = - (float)puppetcopter_imu.yacc /1000;
+    float yacc  = - floor(puppetcopter_imu.xacc * 1000 + 0.5) /1000;
     float zacc  = - (float)puppetcopter_imu.zacc /1000;
 
-    // remove accleration spikes: not the nice way :)
-    if (abs(last_xacc - xacc) > 8)
+    // Yaw angle not correct:
+    // This migtht change with different vicon romms and calibrations
+    yaw -= pi;
+	if (yaw < -pi)
+		yaw += 2*pi;
+
+    // remove accleration spikes:
+    if (abs(last_xacc - xacc) > 5)
     	xacc = last_xacc;
     last_xacc = xacc;
-    if (abs(last_yacc - yacc) > 8)
+    if (abs(last_yacc - yacc) > 5)
     	yacc = last_yacc;
     last_yacc = yacc;
-    if (abs(last_zacc - zacc) > 8)
+    if (abs(last_zacc - zacc) > 5)
     	zacc = last_zacc;
     last_zacc = zacc;
 
     // Quaternion calculation
-    float w  = cos(roll/2)*cos(pitch/2)*cos(yaw/2) + sin(roll/2)*sin(pitch/2)*sin(yaw/2);
-    float q1 = sin(roll/2)*cos(pitch/2)*cos(yaw/2) - cos(roll/2)*sin(pitch/2)*sin(yaw/2);
-    float q2 = cos(roll/2)*sin(pitch/2)*cos(yaw/2) + sin(roll/2)*cos(pitch/2)*sin(yaw/2);
-    float q3 = cos(roll/2)*cos(pitch/2)*sin(yaw/2) - sin(roll/2)*sin(pitch/2)*cos(yaw/2);
-
+	geometry_msgs::Quaternion quat;
+    quat = tf::createQuaternionMsgFromRollPitchYaw((double)roll, (double)pitch, (double)yaw);
+	
 	// Rotation Quaternion
-    imu_msg.orientation.x = q1;
-    imu_msg.orientation.y = q2;
-    imu_msg.orientation.z = q3;
-    imu_msg.orientation.w = w;
+    imu_msg.orientation = quat;
     // Angular Velocity
     imu_msg.angular_velocity.x = xgyro;
     imu_msg.angular_velocity.y = ygyro;
@@ -152,11 +156,6 @@ void convertMavlinkCustomIMUtoROS(mavlink_message_t* message, sensor_msgs::Imu &
     imu_msg.linear_acceleration.y = yacc;
     imu_msg.linear_acceleration.z = zacc;
 
-    float quat_length_sqr = w*w + q1*q1 + q2*q2 + q3*q3;
-    if (abs(quat_length_sqr - 1) > 0.0001)
-    {
-        ROS_INFO("No unit quaternion for attitude! %f", sqrt(quat_length_sqr));
-    }
     if (verbose)
     	ROS_INFO("PuppetCopter IMU Message recieved and processed");
 }
