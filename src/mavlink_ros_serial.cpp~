@@ -159,7 +159,7 @@ void convertROStoMAVLink(const mavlink_ros::controller_out & msg)
 	// Pack the new MAVLink message:
 	
 	mavlink_message_t msg_t;
-	mavlink_msg_set_roll_pitch_yaw_thrust_pack(sysid, compid, &msg_t, MAV_AUTOPILOT_GENERIC/*target_system (???)*/, MAV_COMP_ID_IMU/*target_component (???)*/, 0.2, 0.1, 0.3, 0.5)/*msg.set_theta, msg.set_phi, msg.set_psi, msg.set_thrust)*/;
+	mavlink_msg_set_roll_pitch_yaw_thrust_pack(sysid, compid, &msg_t, MAV_AUTOPILOT_GENERIC/*target_system (???)*/, MAV_COMP_ID_IMU/*target_component (???)*/, msg.set_theta, msg.set_phi, msg.set_psi, msg.set_thrust);
 	
 	if (verbose)
 		ROS_INFO("Sent Mavlink message");
