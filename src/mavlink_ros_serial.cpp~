@@ -67,7 +67,7 @@
 // Filippo & Georg
 // ========================================
 #include "mavlink_msg_puppetcopter_imu.h"
-#include "mavlink_ros/control_message.h"
+
 #include "mavlink_ros/controller_out.h" 
 // ========================================
  // CUSTOM Definitions END
@@ -131,7 +131,7 @@ void convertMavlinkCustomIMUtoROS(mavlink_message_t* message, sensor_msgs::Imu &
     imu_msg.angular_velocity.y = floor(puppetcopter_imu.ygyro * 1000 + 0.5) /1000;
     imu_msg.angular_velocity.z = floor(puppetcopter_imu.zgyro * 1000 + 0.5) /1000;
     // Linear Accelerations
-    imu_msg.linear_acceleration.x = floor(puppetcopter_imu.xacc * 1000 + 0.5) /1000;
+    imu_msg.linear_acceleration.x = puppetcopter_imu.xacc; //floor(puppetcopter_imu.xacc * 1000 + 0.5) /1000;
     imu_msg.linear_acceleration.y = (float)puppetcopter_imu.yacc /1000;
     imu_msg.linear_acceleration.z = (float)puppetcopter_imu.zacc /1000;
 
@@ -157,8 +157,10 @@ void convertROStoMAVLink(const mavlink_ros::controller_out & msg)
 	mavlink_msg.fromlcm=FALSE;
 
 	// Pack the new MAVLink message:
+	
 	mavlink_message_t msg_t;
-	mavlink_msg_set_roll_pitch_yaw_thrust_pack(sysid, compid, &msg_t, sysid/*target_system (???)*/, compid/*target_component (???)*/, msg.set_theta, msg.set_phi, msg.set_psi, msg.set_thrust);
+	mavlink_msg_set_roll_pitch_yaw_thrust_pack(sysid, compid, &msg_t, MAV_AUTOPILOT_GENERIC/*target_system (???)*/, MAV_COMP_ID_IMU/*target_component (???)*/, 0.2, 0.1, 0.3, 0.5)/*msg.set_theta, msg.set_phi, msg.set_psi, msg.set_thrust)*/;
+	
 	if (verbose)
 		ROS_INFO("Sent Mavlink message");
 
@@ -557,7 +559,7 @@ int main(int argc, char **argv) {
 // CUSTOM modification of nodes
 // Filippo & Georg
 // ===================================================================================================
-	mavlink_sub = n.subscribe("/controller_out", 1000,  convertROStoMAVLink);
+	mavlink_sub = n.subscribe("/to_MAVLink_node", 1000,  convertROStoMAVLink);
 //  removed unneccesary publisher:
 	mavlink_pub = n.advertise<mavlink_ros::Mavlink> ("/fromMAVLINK", 1000);
 	ros::NodeHandle attitude_nh;
