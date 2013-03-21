@@ -59,3 +59,7 @@ target_link_libraries(mavlink_ros_serial
   ${GLIB2_LIBRARY}
   ${GTHREAD2_LIBRARY}
 )
+
+# get eigen
+find_package(Eigen REQUIRED)
+include_directories(${Eigen_INCLUDE_DIRS})

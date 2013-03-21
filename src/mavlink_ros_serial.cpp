@@ -66,7 +66,8 @@
 #include "mavlink_msg_puppetcopter_imu.h"
 #include "mavlink_ros/control_message.h"
 #include "geometry_msgs/Quaternion.h"
-#include "tf/transform_datatypes.h"
+#include "tf/transform_datatypes.h" 	
+#include <Eigen/Dense>
 
 using std::string;
 using namespace std;
@@ -98,9 +99,9 @@ ros::Publisher attitude_pub;
  * Custom Message Conversions (Georg)
  */
 // Definitions for removing acceleration spikes
-float last_xacc = 0;
-float last_yacc = 0;
-float last_zacc = 9.8;
+bool init = false;
+float last_xacc, last_yacc,last_zacc;
+float accel_threshold = 10;
 float pi = 3.14159265;
 void convertMavlinkCustomIMUtoROS(mavlink_message_t* message, sensor_msgs::Imu &imu_msg)
 {
@@ -112,57 +113,58 @@ void convertMavlinkCustomIMUtoROS(mavlink_message_t* message, sensor_msgs::Imu &
     mavlink_puppetcopter_imu_t puppetcopter_imu;
 	mavlink_msg_puppetcopter_imu_decode(message, &puppetcopter_imu);
 
-	// Coordinate Transformation
-	// exchange x, y - negate z
     float roll  = puppetcopter_imu.roll;
     float pitch = puppetcopter_imu.pitch;
     float yaw   = puppetcopter_imu.yaw;
-    float xgyro = puppetcopter_imu.ygyro;
-    float ygyro = puppetcopter_imu.xgyro;
+    Eigen::Vector3f euler_angles(roll,pitch,yaw);
+
+    float xgyro = puppetcopter_imu.xgyro;
+    float ygyro = puppetcopter_imu.ygyro;
     float zgyro = puppetcopter_imu.zgyro;
-    float xacc  = - (float)puppetcopter_imu.yacc /1000;
-    float yacc  = - floor(puppetcopter_imu.xacc * 1000 + 0.5) /1000;
-    float zacc  = - (float)puppetcopter_imu.zacc /1000;
+    Eigen::Vector3f angular_velocities(xgyro,ygyro,zgyro);
 
-    // Yaw angle not correct:
-    // This migtht change with different vicon romms and calibrations
-    yaw -= pi;
-	if (yaw < -pi)
-		yaw += 2*pi;
-
+    float xacc  = floor(puppetcopter_imu.xacc * 1000 + 0.5) /1000;
+    float yacc  = (float)puppetcopter_imu.yacc /1000;
+    float zacc  = (float)puppetcopter_imu.zacc /1000;
     // remove accleration spikes:
-    if (abs(last_xacc - xacc) > 5)
+    if (abs(last_xacc - xacc) > accel_threshold && init)
     	xacc = last_xacc;
     last_xacc = xacc;
-    if (abs(last_yacc - yacc) > 5)
+    if (abs(last_yacc - yacc) > accel_threshold && init)
     	yacc = last_yacc;
     last_yacc = yacc;
-    if (abs(last_zacc - zacc) > 5)
+    if (abs(last_zacc - zacc) > accel_threshold && init)
     	zacc = last_zacc;
     last_zacc = zacc;
+    Eigen::Vector3f linear_accelerations(xacc,yacc,zacc);
+    if (linear_accelerations.norm() > 20)
+    	init = false;
 
-    // Quaternion calculation
+    // define a transformation of the coordinate system
+    // APM2.5 system defines the z-axis downwards
+    // we want it to point upwards like the system expected from the EKF-framework
+    Eigen::Vector3f vec(1,-1,-1);
+    Eigen::Matrix3f C_trans = vec.asDiagonal();
+
+    euler_angles         = C_trans * euler_angles;
+    angular_velocities   = C_trans * angular_velocities;
+    linear_accelerations = C_trans * linear_accelerations;
+
+    // Quaternion
 	geometry_msgs::Quaternion quat;
-    quat = tf::createQuaternionMsgFromRollPitchYaw((double)roll, (double)pitch, (double)yaw);
-	
-	// Rotation Quaternion
+    quat = tf::createQuaternionMsgFromRollPitchYaw((double)euler_angles[0], (double)euler_angles[1], (double)euler_angles[2]);
     imu_msg.orientation = quat;
     // Angular Velocity
-    imu_msg.angular_velocity.x = xgyro;
-    imu_msg.angular_velocity.y = ygyro;
-    imu_msg.angular_velocity.z = zgyro;
+    imu_msg.angular_velocity.x = angular_velocities[0];
+    imu_msg.angular_velocity.y = angular_velocities[1];
+    imu_msg.angular_velocity.z = angular_velocities[2];
     // Linear Accelerations
-    imu_msg.linear_acceleration.x = xacc;
-    imu_msg.linear_acceleration.y = yacc;
-    imu_msg.linear_acceleration.z = zacc;
+    imu_msg.linear_acceleration.x = linear_accelerations[0];
+    imu_msg.linear_acceleration.y = linear_accelerations[1];
+    imu_msg.linear_acceleration.z = linear_accelerations[2];
 
     if (verbose)
     	ROS_INFO("PuppetCopter IMU Message recieved and processed");
-}
-
-void convertCustomControlToMavlink(const mavlink_ros::control_message & control_msg)
-{
-	ROS_INFO("Control Message recieved");
 }
 
 /**
@@ -536,7 +538,7 @@ int main(int argc, char **argv) {
 
 	// SETUP ROS
 	ros::NodeHandle n;
-	mavlink_sub = n.subscribe("/control_out", 1000, convertCustomControlToMavlink);
+	mavlink_sub = n.subscribe("/control_out", 1000, mavlinkCallback);
 	mavlink_pub = n.advertise<mavlink_ros::Mavlink> ("/fromMAVLINK", 10);
 	ros::NodeHandle attitude_nh;
 	attitude_pub = attitude_nh.advertise<sensor_msgs::Imu>("/PuppetCopterImu", 1000);
