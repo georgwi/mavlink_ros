@@ -63,11 +63,14 @@
 #include <sys/time.h>
 #include <time.h>
 
-#include "mavlink_msg_puppetcopter_imu.h"
+// CUSTOM includes (Georg)
+// =======================================
 #include "mavlink_ros/control_message.h"
 #include "geometry_msgs/Quaternion.h"
 #include "tf/transform_datatypes.h" 	
 #include <Eigen/Dense>
+ // =======================================
+ // CUSTOM END
 
 using std::string;
 using namespace std;
@@ -95,14 +98,11 @@ ros::Subscriber mavlink_sub;
 ros::Publisher mavlink_pub;
 ros::Publisher attitude_pub;
 
-/**
- * Custom Message Conversions (Georg)
- */
-// Definitions for removing acceleration spikes
+// CUSTOM functions (Georg)
+// =======================================================================================================
 bool init = false;
 float last_xacc, last_yacc,last_zacc;
 float accel_threshold = 10;
-float pi = 3.14159265;
 void convertMavlinkCustomIMUtoROS(mavlink_message_t* message, sensor_msgs::Imu &imu_msg)
 {
 	// Timestamp the message
@@ -123,9 +123,9 @@ void convertMavlinkCustomIMUtoROS(mavlink_message_t* message, sensor_msgs::Imu &
     float zgyro = puppetcopter_imu.zgyro;
     Eigen::Vector3f angular_velocities(xgyro,ygyro,zgyro);
 
-    float xacc  = floor(puppetcopter_imu.xacc * 1000 + 0.5) /1000;
-    float yacc  = (float)puppetcopter_imu.yacc /1000;
-    float zacc  = (float)puppetcopter_imu.zacc /1000;
+    float xacc  = puppetcopter_imu.xacc;
+    float yacc  = puppetcopter_imu.yacc;
+    float zacc  = puppetcopter_imu.zacc;
     // remove accleration spikes:
     if (abs(last_xacc - xacc) > accel_threshold && init)
     	xacc = last_xacc;
@@ -165,7 +165,11 @@ void convertMavlinkCustomIMUtoROS(mavlink_message_t* message, sensor_msgs::Imu &
 
     if (verbose)
     	ROS_INFO("PuppetCopter IMU Message recieved and processed");
+    //if (puppetcopter_imu.slot)
+    	ROS_INFO("PuppetCopter Testmessage recieved: %f", puppetcopter_imu.slot);
 }
+// =======================================================================================================
+// CUSTOM END
 
 /**
  *
@@ -424,6 +428,8 @@ void* serial_wait(void* serial_ptr)
 
 			switch(message.msgid)
 			{
+// CUSTOM messages (Georg)
+// ==========================================================================================================
 			case MAVLINK_MSG_ID_ATTITUDE:
 				{
 				    //ROS_INFO("Recieved Attitude");
@@ -440,6 +446,8 @@ void* serial_wait(void* serial_ptr)
 					convertMavlinkCustomIMUtoROS(&message, imu_msg);
 					attitude_pub.publish(imu_msg);
 				}
+// ==========================================================================================================
+// CUSTOM END
 			break;
 			}
 		}
@@ -537,11 +545,16 @@ int main(int argc, char **argv) {
 
 
 	// SETUP ROS
+	
+// CUSTOM adapted topics (Georg)
+// ==============================================================================================
 	ros::NodeHandle n;
 	mavlink_sub = n.subscribe("/control_out", 1000, mavlinkCallback);
 	mavlink_pub = n.advertise<mavlink_ros::Mavlink> ("/fromMAVLINK", 10);
 	ros::NodeHandle attitude_nh;
 	attitude_pub = attitude_nh.advertise<sensor_msgs::Imu>("/PuppetCopterImu", 1000);
+// ==============================================================================================
+// CUSTOM END
 
 	GThread* serial_thread;
 	GError* err;
