@@ -69,8 +69,9 @@
 #include "geometry_msgs/Quaternion.h"
 #include "tf/transform_datatypes.h" 	
 #include <Eigen/Dense>
- // =======================================
- // CUSTOM END
+//#include <libnotify/notify.h>
+// =======================================
+// CUSTOM END
 
 using std::string;
 using namespace std;
@@ -166,7 +167,13 @@ void convertMavlinkCustomIMUtoROS(mavlink_message_t* message, sensor_msgs::Imu &
     if (verbose)
     	ROS_INFO("PuppetCopter IMU Message recieved and processed");
     //if (puppetcopter_imu.slot)
-    	ROS_INFO("PuppetCopter Testmessage recieved: %f", puppetcopter_imu.slot);
+    //	ROS_INFO("PuppetCopter Testmessage recieved: %f", puppetcopter_imu.slot);
+    
+    //if (puppetcopter_imu.slot < 11)
+    //	ROS_WARN("Low Voltage: %fV", puppetcopter_imu.slot);
+
+    if (!(message->seq)%255 && puppetcopter_imu.slot < 11)
+    	ROS_WARN("Low Voltage: %fV", puppetcopter_imu.slot);
 }
 // =======================================================================================================
 // CUSTOM END
