@@ -154,7 +154,10 @@ void convertMavlinkCustomIMUtoROS(mavlink_message_t* message, sensor_msgs::Imu &
     // Quaternion
 	geometry_msgs::Quaternion quat;
     quat = tf::createQuaternionMsgFromRollPitchYaw((double)euler_angles[0], (double)euler_angles[1], (double)euler_angles[2]);
-    imu_msg.orientation = quat;
+    imu_msg.orientation.x = - quat.y;
+    imu_msg.orientation.y = - quat.x;
+    imu_msg.orientation.z = quat.z;
+    imu_msg.orientation.w = quat.w;
     // Angular Velocity
     imu_msg.angular_velocity.x = angular_velocities[0];
     imu_msg.angular_velocity.y = angular_velocities[1];
