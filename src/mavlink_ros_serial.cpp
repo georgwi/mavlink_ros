@@ -69,9 +69,9 @@
 #include "geometry_msgs/Quaternion.h"
 #include "tf/transform_datatypes.h" 	
 #include <Eigen/Dense>
-//#include <libnotify/notify.h>
-// =======================================
-// CUSTOM END
+#include "std_msgs/Float64.h"
+ // =======================================
+ // CUSTOM END
 
 using std::string;
 using namespace std;
@@ -98,13 +98,14 @@ int fd;
 ros::Subscriber mavlink_sub;
 ros::Publisher mavlink_pub;
 ros::Publisher attitude_pub;
+ros::Publisher voltage_pub;
 
 // CUSTOM functions (Georg)
 // =======================================================================================================
 bool init = false;
 float last_xacc, last_yacc,last_zacc;
 float accel_threshold = 10;
-void convertMavlinkCustomIMUtoROS(mavlink_message_t* message, sensor_msgs::Imu &imu_msg)
+void convertMavlinkCustomIMUtoROS(mavlink_message_t* message, sensor_msgs::Imu &imu_msg, std_msgs::Float64 &voltage)
 {
 	// Timestamp the message
 	imu_msg.header.stamp = ros::Time::now();
@@ -169,14 +170,8 @@ void convertMavlinkCustomIMUtoROS(mavlink_message_t* message, sensor_msgs::Imu &
 
     if (verbose)
     	ROS_INFO("PuppetCopter IMU Message recieved and processed");
-    //if (puppetcopter_imu.slot)
-    //	ROS_INFO("PuppetCopter Testmessage recieved: %f", puppetcopter_imu.slot);
-    
-    //if (puppetcopter_imu.slot < 11)
-    //	ROS_WARN("Low Voltage: %fV", puppetcopter_imu.slot);
 
-    if (!(message->seq)%255 && puppetcopter_imu.slot < 11)
-    	ROS_WARN("Low Voltage: %fV", puppetcopter_imu.slot);
+	voltage.data = puppetcopter_imu.slot;
 }
 // =======================================================================================================
 // CUSTOM END
@@ -453,8 +448,11 @@ void* serial_wait(void* serial_ptr)
 				{
 					//ROS_INFO("Recieved Custom IMU");
 					sensor_msgs::Imu imu_msg;
-					convertMavlinkCustomIMUtoROS(&message, imu_msg);
+					std_msgs::Float64 volt_msg;
+					convertMavlinkCustomIMUtoROS(&message, imu_msg, volt_msg);
 					attitude_pub.publish(imu_msg);
+					voltage_pub.publish(volt_msg);
+				
 				}
 // ==========================================================================================================
 // CUSTOM END
@@ -563,6 +561,7 @@ int main(int argc, char **argv) {
 	mavlink_pub = n.advertise<mavlink_ros::Mavlink> ("/fromMAVLINK", 10);
 	ros::NodeHandle attitude_nh;
 	attitude_pub = attitude_nh.advertise<sensor_msgs::Imu>("/PuppetCopterImu", 1000);
+	voltage_pub = attitude_nh.advertise<std_msgs::Float64>("/voltage", 1000);
 // ==============================================================================================
 // CUSTOM END
 
